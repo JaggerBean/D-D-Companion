@@ -260,7 +260,7 @@ class AppController:
             })
         return sorted(result, key=lambda item: str(item["nickname"] or item["name"]).lower())
 
-    def update_participant(self, member_id: str, nickname: str, enabled: bool, icon_data: str = "", clear_icon: bool = False) -> None:
+    def update_participant(self, member_id: str, nickname: str, enabled: bool, icon_data: str = "", clear_icon: bool = False) -> int:
         cleaned_id = member_id.strip()
         if not cleaned_id:
             raise ValueError("That participant is no longer available")
@@ -269,6 +269,8 @@ class AppController:
             raise ValueError("Nicknames must be 80 characters or fewer")
         with self._participants_lock:
             profile = self.config.participants.setdefault(cleaned_id, {"nickname": "", "enabled": True, "icon": ""})
+            previous_nickname = str(profile.get("nickname", "")).strip()
+            member_name = str(self._voice_members.get(cleaned_id, {}).get("name", "")).strip()
             profile["nickname"] = cleaned_name
             profile["enabled"] = bool(enabled)
             if clear_icon:
@@ -276,6 +278,8 @@ class AppController:
             if icon_data:
                 profile["icon"] = self._save_participant_icon(cleaned_id, icon_data)
         save_config(self.config)
+        display_name = cleaned_name or member_name or previous_nickname
+        return self.session.rename_source({previous_nickname, member_name}, display_name)
 
     @staticmethod
     def _participant_icon_uri(relative_path: str) -> str:

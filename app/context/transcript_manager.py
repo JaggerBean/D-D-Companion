@@ -182,6 +182,26 @@ class SessionManager:
         with self._lock:
             return list(self._entries)
 
+    def rename_source(self, old_names: set[str], new_name: str) -> int:
+        """Rename one participant everywhere in the active session exports."""
+        normalized_old = {" ".join(name.split()).casefold() for name in old_names if name.strip()}
+        cleaned_new = " ".join(new_name.split())
+        if not normalized_old or not cleaned_new:
+            return 0
+        with self._lock:
+            if not self.session_dir:
+                return 0
+            entries = list(self._entries)
+            changed = 0
+            for index, entry in enumerate(entries):
+                if entry.source.casefold() in normalized_old and entry.source != cleaned_new:
+                    entries[index] = replace(entry, source=cleaned_new)
+                    changed += 1
+            if changed:
+                self._entries = deque(entries, maxlen=5000)
+                self._rewrite_entries_locked(entries)
+            return changed
+
     def update_entry(self, index: int, text: str) -> None:
         """Apply an explicit user correction and rebuild session transcript files."""
         # Keep the deliberate line structure of scene and event markers while

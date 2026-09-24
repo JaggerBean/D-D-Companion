@@ -76,8 +76,9 @@ class DashboardApi:
         return {"message": "Transcript entry updated."}
 
     def update_participant(self, member_id: str, nickname: str, enabled: bool, icon_data: str = "", clear_icon: bool = False) -> dict[str, str]:
-        self.controller.update_participant(member_id, nickname, enabled, icon_data, clear_icon)
-        return {"message": "Participant settings saved."}
+        changed = self.controller.update_participant(member_id, nickname, enabled, icon_data, clear_icon)
+        suffix = f" Updated {changed} transcript line{'s' if changed != 1 else ''}." if changed else ""
+        return {"message": f"Participant settings saved.{suffix}"}
 
     def save_shortcuts(self, shortcuts: list[dict[str, object]]) -> dict[str, str]:
         self.controller.update_shortcuts(shortcuts)
