@@ -81,6 +81,7 @@ class AppController:
             {
                 "id": campaign.id,
                 "name": campaign.name,
+                "icon": self._participant_icon_uri(campaign.icon),
                 "vault_directory": campaign.vault_directory,
                 "active": campaign.id == self.config.active_campaign_id,
             }
@@ -104,6 +105,14 @@ class AppController:
         self.engine.vocabulary_text = campaign.vocabulary
         save_config(self.config)
         return campaign
+
+    def update_campaign_icon(self, icon_data: str = "", clear_icon: bool = False) -> None:
+        campaign = self._campaign()
+        if clear_icon:
+            campaign.icon = ""
+        if icon_data:
+            campaign.icon = self._save_campaign_icon(icon_data)
+        save_config(self.config)
 
     def switch_campaign(self, campaign_id: str) -> None:
         if self.is_listening:
@@ -440,6 +449,22 @@ class AppController:
         folder = ROOT / "config" / "participant-icons" / self._campaign().id
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{safe_id}{suffixes[mime]}"
+        path.write_bytes(data)
+        return str(path.relative_to(ROOT)).replace("\\", "/")
+
+    def _save_campaign_icon(self, data_url: str) -> str:
+        try:
+            header, encoded = data_url.split(",", 1)
+            mime = header[5:].split(";", 1)[0].lower()
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, UnicodeError):
+            raise ValueError("That campaign image could not be read") from None
+        suffixes = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}
+        if mime not in suffixes or not data or len(data) > 2 * 1024 * 1024:
+            raise ValueError("Use a PNG, JPG, WebP, or GIF image smaller than 2 MB")
+        folder = ROOT / "config" / "campaign-icons"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{self._campaign().id}{suffixes[mime]}"
         path.write_bytes(data)
         return str(path.relative_to(ROOT)).replace("\\", "/")
 

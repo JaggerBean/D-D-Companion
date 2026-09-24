@@ -152,6 +152,10 @@ class DashboardApi:
         campaign = self.controller.create_campaign(name)
         return {"message": f"Campaign created: {campaign.name}. Set up its vault to continue."}
 
+    def update_campaign_icon(self, icon_data: str = "", clear_icon: bool = False) -> dict[str, str]:
+        self.controller.update_campaign_icon(icon_data, clear_icon)
+        return {"message": "Campaign icon saved."}
+
     def switch_campaign(self, campaign_id: str) -> dict[str, str]:
         self.controller.switch_campaign(campaign_id)
         return {"message": f"Switched to {self.controller._campaign().name}."}

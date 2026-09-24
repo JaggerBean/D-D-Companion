@@ -113,6 +113,7 @@ class CampaignConfig:
     participants: dict[str, dict[str, Any]] = field(default_factory=dict)
     vocabulary: str = ""
     ai_context: str = ""
+    icon: str = ""
 
 
 def default_campaigns() -> list[CampaignConfig]:
