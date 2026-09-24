@@ -20,7 +20,9 @@ def configure_logging() -> None:
 def main() -> None:
     configure_logging()
     config = load_config()
-    (ROOT / "config" / "vocabulary.txt").touch(exist_ok=True)
+    config_directory = ROOT / "config"
+    config_directory.mkdir(parents=True, exist_ok=True)
+    (config_directory / "vocabulary.txt").touch(exist_ok=True)
     (ROOT / "character").mkdir(exist_ok=True)
     controller = AppController(config)
     run_dashboard(controller)
