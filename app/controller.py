@@ -371,7 +371,7 @@ class AppController:
         self._ensure_session()
         assert self.session.session_dir is not None
         session_dir = self.session.session_dir
-        transcript_path = session_dir / "transcript.txt"
+        transcript_path = session_dir / "transcript.jsonl"
         notes_path = session_dir / "notes.md"
         transcript = transcript_path.read_text(encoding="utf-8") if transcript_path.exists() else ""
         notes = notes_path.read_text(encoding="utf-8") if notes_path.exists() else ""
@@ -387,7 +387,7 @@ class AppController:
             ## Source files
             These are the local source paths for reference. The transcript and notes are included below so you can work from this pasted prompt.
             - Session folder: {session_dir}
-            - Raw transcript: {transcript_path}
+            - Structured transcript (JSON Lines): {transcript_path}
             - Session notes: {notes_path}
             - Event-image folder: {session_dir / 'images'}
 
@@ -399,12 +399,19 @@ class AppController:
             Event images saved for this session:
             {image_list}
 
+            ## How to read the structured transcript
+            The transcript below is JSON Lines: one chronological JSON object per entry.
+            - Ordinary dialogue has `source`, `text`, `timestamp`, and sometimes `confidence`.
+            - A scene boundary has `scene_marker: true`.
+            - An explicit user event capture has `event_marker: true`. Its `text` contains the user-provided type, label, details, and optional image reference.
+            - Use timestamps and the adjacent dialogue entries to understand the context around each marked entry.
+
             ## Rules
-            1. Treat the raw transcript as evidence, not reliable canon. It is speech-to-text and can contain errors.
-            2. `DND_EVENT_START` / `DND_EVENT_END` blocks are explicit user captures. Use the dialogue immediately before and after each one to understand its context.
-            3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an explicit event marker says `CAPTURED_BY_USER: true` and `CANON_PERMISSION: CREATE_OR_UPDATE`. Otherwise, update existing vault material only or flag it for review.
+            1. Treat dialogue text as evidence, not reliable canon. It is speech-to-text and can contain errors.
+            2. Treat `event_marker: true` as an explicit user capture. Use the dialogue immediately before and after it to understand the captured situation.
+            3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an entry has `event_marker: true` and grants `CANON_PERMISSION: CREATE_OR_UPDATE` in its text. Otherwise, update existing vault material only or flag it for review.
             4. Resolve likely speech-to-text misspellings by matching sound-alikes and context to existing canonical vault names. Never silently create a near-duplicate. Record uncertain matches under `Needs review`.
-            5. An `IMAGE: images/...` line refers to an image captured with that marker. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
+            5. An `IMAGE: images/...` reference in a marked entry points to an image captured with that event. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
             6. Preserve uncertainty. Do not invent facts, names, relationships, or outcomes.
 
             ## Deliverable
@@ -414,7 +421,7 @@ class AppController:
             3. Obsidian-ready Markdown for the session note and only the entity-note updates authorized by user markers.
             4. A `Needs review` list for uncertain names, details, or possible duplicate entities.
 
-            ## RAW TRANSCRIPT
+            ## STRUCTURED TRANSCRIPT (JSONL)
             {transcript or '[No transcript has been recorded yet.]'}
 
             ## IMPORTANT SESSION NOTES
