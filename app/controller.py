@@ -92,12 +92,12 @@ class AppController:
                 "enabled": enabled,
                 "scene_label": scene_label,
             })
-        was_running = self.worker.running
-        if was_running:
+        was_registered = self.hotkeys.running
+        if was_registered:
             self.hotkeys.stop()
         self.config.hotkeys.shortcuts = cleaned
         save_config(self.config)
-        if was_running:
+        if was_registered:
             self.hotkeys.start()
 
     def _run_shortcut(self, shortcut: dict[str, object]) -> None:
@@ -189,7 +189,6 @@ class AppController:
             self.discord_router.close()
             self.discord_router = None
         self.worker.stop()
-        self.hotkeys.stop()
         LOGGER.info("Listening stopped")
 
     def _on_entry(self, entry: TranscriptEntry) -> None:
@@ -521,4 +520,5 @@ class AppController:
 
     def shutdown(self) -> None:
         self.stop_listening()
+        self.hotkeys.stop()
         self.session.close()

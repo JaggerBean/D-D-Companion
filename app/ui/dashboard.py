@@ -161,6 +161,7 @@ def run_dashboard(controller: AppController) -> None:
             f"window.dispatchEvent(new CustomEvent('dnd-open-scene', {{detail: {json.dumps({'shortcutId': shortcut_id})}}}))"
         )
     )
+    controller.hotkeys.start()
     window.events.closed += lambda *_args: controller.shutdown()
     icon = ROOT / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)
