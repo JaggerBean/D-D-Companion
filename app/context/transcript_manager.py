@@ -184,7 +184,9 @@ class SessionManager:
 
     def update_entry(self, index: int, text: str) -> None:
         """Apply an explicit user correction and rebuild session transcript files."""
-        cleaned = " ".join(text.split())
+        # Keep the deliberate line structure of scene and event markers while
+        # normalizing accidental whitespace within each line of text.
+        cleaned = "\n".join(" ".join(line.split()) for line in text.splitlines()).strip()
         if not cleaned:
             raise ValueError("Transcript text cannot be empty")
         with self._lock:

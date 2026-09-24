@@ -65,6 +65,10 @@ class DashboardApi:
         placement = "inserted after that transcript entry" if after_index is not None else "added to transcript"
         return {"message": f"{event_type.title()} marker {placement}."}
 
+    def update_transcript_entry(self, index: int, text: str) -> dict[str, str]:
+        self.controller.update_transcript_entry(int(index), text)
+        return {"message": "Transcript entry updated."}
+
     def save_hotkeys(self, capture_event: str, new_scene: str) -> dict[str, str]:
         self.controller.update_hotkeys(capture_event, new_scene)
         return {"message": "Shortcuts saved."}

@@ -168,6 +168,11 @@ class AppController:
             self.last_handoff = f"{event_type.title()} marker inserted after transcript entry"
         self._notify()
 
+    def update_transcript_entry(self, index: int, text: str) -> None:
+        self.session.update_entry(index, text)
+        self.last_handoff = "Transcript entry updated"
+        self._notify()
+
     def open_capture_menu(self) -> None:
         self.show_window()
         if callable(self._capture_menu_callback):
