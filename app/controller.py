@@ -34,7 +34,7 @@ class AppController:
         self._window_callback = None
         self._capture_menu_callback = None
         self._scene_menu_callback = None
-        self._scene_toggle_states: dict[str, bool] = {}
+        self._active_scene: dict[str, str] | None = None
         self.last_handoff = ""
         self.discord_router = None
         self.discord_bot = None
@@ -45,6 +45,9 @@ class AppController:
     @property
     def is_listening(self) -> bool:
         return self.worker.running
+
+    def active_scene(self) -> dict[str, str] | None:
+        return dict(self._active_scene) if self._active_scene else None
 
     def set_show_window_callback(self, callback: object) -> None:
         self._window_callback = callback
@@ -79,9 +82,8 @@ class AppController:
             if action == "event" and event_type not in allowed_event_types:
                 event_type = "Other"
             scene_label = " ".join(str(raw.get("scene_label", "")).split())[:120]
-            scene_alternate_label = " ".join(str(raw.get("scene_alternate_label", "")).split())[:120]
             if action != "scene":
-                scene_label, scene_alternate_label = "", ""
+                scene_label = ""
             cleaned.append({
                 "id": str(raw.get("id", "")).strip() or uuid4().hex,
                 "action": action,
@@ -89,7 +91,6 @@ class AppController:
                 "keys": keys,
                 "enabled": enabled,
                 "scene_label": scene_label,
-                "scene_alternate_label": scene_alternate_label,
             })
         was_running = self.worker.running
         if was_running:
@@ -104,17 +105,15 @@ class AppController:
         if action == "event":
             self.open_capture_menu(str(shortcut.get("event_type", "Other")))
         elif action == "scene":
+            shortcut_id = str(shortcut.get("id", ""))
+            if self._active_scene and self._active_scene.get("shortcut_id") == shortcut_id:
+                self.end_scene()
+                return
             label = str(shortcut.get("scene_label", "")).strip()
-            alternate_label = str(shortcut.get("scene_alternate_label", "")).strip()
             if not label:
-                self.open_scene_menu()
-            elif alternate_label:
-                shortcut_id = str(shortcut.get("id", ""))
-                use_alternate = self._scene_toggle_states.get(shortcut_id, False)
-                self.new_scene(alternate_label if use_alternate else label)
-                self._scene_toggle_states[shortcut_id] = not use_alternate
+                self.open_scene_menu(shortcut_id)
             else:
-                self.new_scene(label)
+                self.new_scene(label, shortcut_id)
         elif action == "listener":
             if self.is_listening:
                 self.stop_listening()
@@ -128,7 +127,7 @@ class AppController:
         save_config(self.config)
 
     def create_session(self, name: str) -> Path:
-        self._scene_toggle_states.clear()
+        self._active_scene = None
         return self.session.create_session(name)
 
     def rename_session(self, name: str) -> Path:
@@ -314,11 +313,34 @@ class AppController:
         self.notes.add_manual(text)
         self.last_handoff = "Note saved"
 
-    def new_scene(self, label: str = "") -> None:
+    def new_scene(self, label: str = "", shortcut_id: str = "") -> None:
         self._ensure_session()
-        self.session.add_entry(TranscriptEntry.scene(label))
-        self.last_handoff = "New scene marked" + (f": {' '.join(label.split())}" if label.strip() else "")
+        if self._active_scene:
+            self._end_active_scene()
+        cleaned_label = " ".join(label.split())
+        scene_id = uuid4().hex
+        self.session.add_entry(TranscriptEntry.scene(cleaned_label, "start", scene_id))
+        self._active_scene = {"id": scene_id, "label": cleaned_label, "shortcut_id": shortcut_id}
+        self.last_handoff = "Scene started" + (f": {cleaned_label}" if cleaned_label else "")
         self._notify()
+
+    def end_scene(self) -> None:
+        if not self._active_scene:
+            self.last_handoff = "No active scene to end"
+            return
+        self._end_active_scene()
+        self._notify()
+
+    def _end_active_scene(self) -> None:
+        if not self._active_scene:
+            return
+        self.session.add_entry(TranscriptEntry.scene(
+            self._active_scene["label"],
+            "end",
+            self._active_scene["id"],
+        ))
+        self.last_handoff = "Scene ended" + (f": {self._active_scene['label']}" if self._active_scene["label"] else "")
+        self._active_scene = None
 
     def add_event_marker(
         self,
@@ -350,10 +372,10 @@ class AppController:
         if callable(self._capture_menu_callback):
             self._capture_menu_callback(event_type)
 
-    def open_scene_menu(self) -> None:
+    def open_scene_menu(self, shortcut_id: str = "") -> None:
         self.show_window()
         if callable(self._scene_menu_callback):
-            self._scene_menu_callback()
+            self._scene_menu_callback(shortcut_id)
 
     def show_window(self) -> None:
         if callable(self._window_callback):
@@ -402,7 +424,7 @@ class AppController:
             ## How to read the structured transcript
             The transcript below is JSON Lines: one chronological JSON object per entry.
             - Ordinary dialogue has `source`, `text`, `timestamp`, and sometimes `confidence`.
-            - A scene boundary has `scene_marker: true`, `marker_type: "scene"`, and its optional label in `label`.
+            - A scene boundary has `scene_marker: true`, `marker_type: "scene"`, an ID in `scene_id`, and a lifecycle value in `scene_state` (`start` or `end`). Its optional label is in `label`.
             - An explicit user event capture has `event_marker: true`, `marker_type: "event"`, `captured_by_user: true`, and dedicated `event_type`, `label`, `details`, `image_path`, and `canon_permission` fields.
             - Use timestamps and the adjacent dialogue entries to understand the context around each marked entry.
 

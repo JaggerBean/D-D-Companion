@@ -20,15 +20,19 @@ class TranscriptEntry:
     image_path: str = ""
     captured_by_user: bool = False
     canon_permission: str = ""
+    scene_state: str = ""
+    scene_id: str = ""
 
     @classmethod
     def spoken(cls, source: str, text: str, confidence: float | None = None) -> "TranscriptEntry":
         return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), source, text.strip(), confidence)
 
     @classmethod
-    def scene(cls, label: str = "") -> "TranscriptEntry":
+    def scene(cls, label: str = "", state: str = "start", scene_id: str = "") -> "TranscriptEntry":
         cleaned = " ".join(label.split())
-        text = f"Scene: {cleaned}" if cleaned else "Scene"
+        scene_state = state if state in {"start", "end"} else "start"
+        verb = "started" if scene_state == "start" else "ended"
+        text = f"Scene {verb}: {cleaned}" if cleaned else f"Scene {verb}"
         return cls(
             datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
             "SYSTEM",
@@ -38,6 +42,8 @@ class TranscriptEntry:
             marker_type="scene",
             label=cleaned,
             captured_by_user=True,
+            scene_state=scene_state,
+            scene_id=scene_id,
         )
 
     @classmethod

@@ -35,6 +35,7 @@ class DashboardApi:
                 for index, entry in enumerate(all_entries[start_index:], start=start_index)
             ],
             "notes": self.controller.session.notes(),
+            "active_scene": self.controller.active_scene(),
             "hotkeys": {
                 "shortcuts": self.controller.config.hotkeys.shortcuts,
             },
@@ -49,9 +50,13 @@ class DashboardApi:
         self.controller.stop_listening()
         return {"message": "Relay listener stopped."}
 
-    def new_scene(self, label: str = "") -> dict[str, str]:
-        self.controller.new_scene(label)
-        return {"message": "Scene marked." if not label.strip() else f"Scene marked: {' '.join(label.split())}."}
+    def new_scene(self, label: str = "", shortcut_id: str = "") -> dict[str, str]:
+        self.controller.new_scene(label, shortcut_id)
+        return {"message": "Scene started." if not label.strip() else f"Scene started: {' '.join(label.split())}."}
+
+    def end_scene(self) -> dict[str, str]:
+        self.controller.end_scene()
+        return {"message": "Scene ended."}
 
     def add_event_marker(
         self,
@@ -137,7 +142,11 @@ def run_dashboard(controller: AppController) -> None:
             f"window.dispatchEvent(new CustomEvent('dnd-open-capture', {{detail: {json.dumps(event_type)}}}))"
         )
     )
-    controller.set_scene_menu_callback(lambda: window.evaluate_js("window.dispatchEvent(new Event('dnd-open-scene'))"))
+    controller.set_scene_menu_callback(
+        lambda shortcut_id="": window.evaluate_js(
+            f"window.dispatchEvent(new CustomEvent('dnd-open-scene', {{detail: {json.dumps({'shortcutId': shortcut_id})}}}))"
+        )
+    )
     window.events.closed += lambda *_args: controller.shutdown()
     icon = ROOT / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)
