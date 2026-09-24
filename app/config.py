@@ -104,6 +104,7 @@ class AppConfig:
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)
+    participants: dict[str, dict[str, Any]] = field(default_factory=dict)
     setup_completed: bool = False
 
 
@@ -133,6 +134,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             discord=_section(DiscordConfig, raw.get("discord")),
             relay=_section(RelayConfig, raw.get("relay")),
             vault=_section(VaultConfig, raw.get("vault")),
+            participants=raw.get("participants") if isinstance(raw.get("participants"), dict) else {},
             setup_completed=bool(raw.get("setup_completed", False)),
         )
     except (OSError, yaml.YAMLError, TypeError, ValueError) as exc:

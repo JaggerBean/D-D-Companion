@@ -14,8 +14,15 @@ LOG = logging.getLogger(__name__)
 
 
 class RelaySubscriber:
-    def __init__(self, endpoint: str, room: str, token_file: str, on_audio: Callable[[str, np.ndarray, int], None]) -> None:
-        self.endpoint, self.room, self.on_audio = endpoint, room, on_audio
+    def __init__(
+        self,
+        endpoint: str,
+        room: str,
+        token_file: str,
+        on_audio: Callable[[str, str, np.ndarray, int], None],
+        on_members: Callable[[list[dict[str, str]]], None],
+    ) -> None:
+        self.endpoint, self.room, self.on_audio, self.on_members = endpoint, room, on_audio, on_members
         self.token = self._token(Path(token_file))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -70,14 +77,26 @@ class RelaySubscriber:
         if not isinstance(raw, str):
             return
         packet = json.loads(raw)
-        if packet.get("type") != "audio":
+        packet_type = packet.get("type")
+        if packet_type == "members":
+            raw_members = packet.get("members")
+            if not isinstance(raw_members, list):
+                return
+            members = [
+                {"id": item["id"], "name": item["name"], "avatar": item.get("avatar", "")}
+                for item in raw_members
+                if isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("name"), str) and isinstance(item.get("avatar", ""), str)
+            ]
+            self.on_members(members)
             return
-        speaker, rate, encoded = packet.get("speaker"), packet.get("sample_rate"), packet.get("pcm16")
+        if packet_type != "audio":
+            return
+        speaker, speaker_id, rate, encoded = packet.get("speaker"), packet.get("speaker_id", ""), packet.get("sample_rate"), packet.get("pcm16")
         if not isinstance(speaker, str) or not isinstance(rate, int) or not isinstance(encoded, str):
             return
         samples = np.frombuffer(base64.b64decode(encoded, validate=True), dtype=np.int16).copy()
         if len(samples):
-            self.on_audio(speaker, samples, rate)
+            self.on_audio(speaker_id if isinstance(speaker_id, str) else speaker, speaker, samples, rate)
 
     @staticmethod
     def _token(path: Path) -> str:

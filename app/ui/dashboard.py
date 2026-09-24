@@ -38,6 +38,7 @@ class DashboardApi:
                 "capture_event": self.controller.config.hotkeys.capture_event,
                 "new_scene": self.controller.config.hotkeys.new_scene,
             },
+            "participants": self.controller.participants(),
         }
 
     def start_bot(self) -> dict[str, str]:
@@ -68,6 +69,10 @@ class DashboardApi:
     def update_transcript_entry(self, index: int, text: str) -> dict[str, str]:
         self.controller.update_transcript_entry(int(index), text)
         return {"message": "Transcript entry updated."}
+
+    def update_participant(self, member_id: str, nickname: str, enabled: bool, icon_data: str = "", clear_icon: bool = False) -> dict[str, str]:
+        self.controller.update_participant(member_id, nickname, enabled, icon_data, clear_icon)
+        return {"message": "Participant settings saved."}
 
     def save_hotkeys(self, capture_event: str, new_scene: str) -> dict[str, str]:
         self.controller.update_hotkeys(capture_event, new_scene)

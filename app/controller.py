@@ -5,6 +5,9 @@ import logging
 import os
 import ctypes
 import textwrap
+import base64
+import re
+import threading
 from pathlib import Path
 
 from app.config import AppConfig, ROOT, resolve_character_dir, save_config
@@ -36,6 +39,8 @@ class AppController:
         self.discord_router = None
         self.discord_bot = None
         self.relay_subscriber = None
+        self._participants_lock = threading.RLock()
+        self._voice_members: dict[str, dict[str, str]] = {}
 
     @property
     def is_listening(self) -> bool:
@@ -88,7 +93,13 @@ class AppController:
             self.hotkeys.start()
             if self.relay_subscriber is None:
                 from app.relay.subscriber import RelaySubscriber
-                self.relay_subscriber = RelaySubscriber(self.config.relay.endpoint, self.config.relay.room, self.config.relay.token_file, self.worker.submit_audio)
+                self.relay_subscriber = RelaySubscriber(
+                    self.config.relay.endpoint,
+                    self.config.relay.room,
+                    self.config.relay.token_file,
+                    self._on_relay_audio,
+                    self._on_relay_members,
+                )
             self.relay_subscriber.start()
             LOGGER.info("Relay listener started")
         except Exception:
@@ -130,6 +141,110 @@ class AppController:
             self.session.add_entry(entry)
         except Exception:
             LOGGER.exception("Could not save transcript entry")
+
+    def _on_relay_members(self, members: list[dict[str, str]]) -> None:
+        changed = False
+        with self._participants_lock:
+            self._voice_members = {}
+            for member in members:
+                member_id, name = member.get("id", ""), member.get("name", "")
+                if not member_id or not name:
+                    continue
+                self._voice_members[member_id] = {
+                    "id": member_id,
+                    "name": name,
+                    "avatar": member.get("avatar", ""),
+                }
+                if member_id not in self.config.participants:
+                    self.config.participants[member_id] = {"nickname": "", "enabled": True, "icon": ""}
+                    changed = True
+        if changed:
+            save_config(self.config)
+
+    def _on_relay_audio(self, member_id: str, name: str, samples: object, sample_rate: int) -> None:
+        """Apply local member preferences before audio reaches the transcription queue."""
+        member_id = member_id.strip() or name.strip() or "unknown"
+        name = name.strip() or member_id
+        changed = False
+        with self._participants_lock:
+            current = self._voice_members.get(member_id, {"id": member_id, "name": name, "avatar": ""})
+            current["name"] = name
+            self._voice_members[member_id] = current
+            profile = self.config.participants.get(member_id)
+            if not isinstance(profile, dict):
+                profile = {"nickname": "", "enabled": True, "icon": ""}
+                self.config.participants[member_id] = profile
+                changed = True
+            enabled = bool(profile.get("enabled", True))
+            source = str(profile.get("nickname", "")).strip() or name
+        if changed:
+            save_config(self.config)
+        if enabled:
+            self.worker.submit_audio(source, samples, sample_rate)  # type: ignore[arg-type]
+
+    def participants(self) -> list[dict[str, object]]:
+        with self._participants_lock:
+            members = list(self._voice_members.values())
+            profiles = dict(self.config.participants)
+        # Before the first roster packet arrives, keep speakers who have already
+        # talked visible so their settings remain reachable.
+        if not members:
+            members = [{"id": member_id, "name": member_id, "avatar": ""} for member_id in profiles]
+        result: list[dict[str, object]] = []
+        for member in members:
+            member_id = member["id"]
+            profile = profiles.get(member_id, {})
+            icon = self._participant_icon_uri(str(profile.get("icon", "")))
+            result.append({
+                "id": member_id,
+                "name": member["name"],
+                "nickname": str(profile.get("nickname", "")),
+                "enabled": bool(profile.get("enabled", True)),
+                "avatar": icon or member.get("avatar", ""),
+            })
+        return sorted(result, key=lambda item: str(item["nickname"] or item["name"]).lower())
+
+    def update_participant(self, member_id: str, nickname: str, enabled: bool, icon_data: str = "", clear_icon: bool = False) -> None:
+        cleaned_id = member_id.strip()
+        if not cleaned_id:
+            raise ValueError("That participant is no longer available")
+        cleaned_name = " ".join(nickname.split())
+        if len(cleaned_name) > 80:
+            raise ValueError("Nicknames must be 80 characters or fewer")
+        with self._participants_lock:
+            profile = self.config.participants.setdefault(cleaned_id, {"nickname": "", "enabled": True, "icon": ""})
+            profile["nickname"] = cleaned_name
+            profile["enabled"] = bool(enabled)
+            if clear_icon:
+                profile["icon"] = ""
+            if icon_data:
+                profile["icon"] = self._save_participant_icon(cleaned_id, icon_data)
+        save_config(self.config)
+
+    @staticmethod
+    def _participant_icon_uri(relative_path: str) -> str:
+        if not relative_path:
+            return ""
+        path = ROOT / relative_path
+        return path.resolve().as_uri() if path.is_file() else ""
+
+    @staticmethod
+    def _save_participant_icon(member_id: str, data_url: str) -> str:
+        try:
+            header, encoded = data_url.split(",", 1)
+            mime = header[5:].split(";", 1)[0].lower()
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, UnicodeError):
+            raise ValueError("That profile image could not be read") from None
+        suffixes = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}
+        if mime not in suffixes or not data or len(data) > 2 * 1024 * 1024:
+            raise ValueError("Use a PNG, JPG, WebP, or GIF image smaller than 2 MB")
+        safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", member_id)[:80] or "participant"
+        folder = ROOT / "config" / "participant-icons"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{safe_id}{suffixes[mime]}"
+        path.write_bytes(data)
+        return str(path.relative_to(ROOT)).replace("\\", "/")
 
     def mark_important(self) -> str:
         marked = self.notes.mark_recent(self.config.context.important_note_seconds)
