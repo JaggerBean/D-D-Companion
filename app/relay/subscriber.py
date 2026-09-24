@@ -55,9 +55,7 @@ class RelaySubscriber:
                     ready = json.loads(socket.recv())
                     if ready.get("type") != "ready":
                         raise RuntimeError("Relay rejected this listener")
-                    self.status = "listening"
-                    self.last_error = ""
-                    LOG.info("Listening to remote D&D relay")
+                    self._set_voice_status(ready.get("voice"))
                     while not self._stop.is_set():
                         try:
                             raw = socket.recv(timeout=1)
@@ -78,6 +76,9 @@ class RelaySubscriber:
             return
         packet = json.loads(raw)
         packet_type = packet.get("type")
+        if packet_type == "voice_status":
+            self._set_voice_status(packet)
+            return
         if packet_type == "members":
             raw_members = packet.get("members")
             if not isinstance(raw_members, list):
@@ -97,6 +98,18 @@ class RelaySubscriber:
         samples = np.frombuffer(base64.b64decode(encoded, validate=True), dtype=np.int16).copy()
         if len(samples):
             self.on_audio(speaker_id if isinstance(speaker_id, str) else speaker, speaker, samples, rate)
+
+    def _set_voice_status(self, voice: object) -> None:
+        if isinstance(voice, dict) and voice.get("in_voice") is True:
+            channel = str(voice.get("channel", "")).strip()
+            self.status = "listening"
+            self.last_error = ""
+            detail = f" in {channel}" if channel else ""
+            LOG.info("Listening to remote D&D relay%s", detail)
+            return
+        self.status = "waiting_for_voice"
+        self.last_error = "Discord bot is not in a voice channel. Use /join in Discord, then try again."
+        LOG.info("Relay connected, waiting for the Discord bot to join a voice channel")
 
     @staticmethod
     def _token(path: Path) -> str:
