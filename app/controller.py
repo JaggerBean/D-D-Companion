@@ -16,6 +16,7 @@ from app.transcription.whisper_engine import WhisperEngine
 from app.transcription.worker import TranscriptionWorker
 
 LOGGER = logging.getLogger(__name__)
+WHISPER_MODELS = ("large-v3-turbo", "distil-large-v3", "medium", "small")
 
 
 class AppController:
@@ -58,6 +59,12 @@ class AppController:
         save_config(self.config)
         if was_running:
             self.hotkeys.start()
+
+    def update_whisper_model(self, model: str) -> None:
+        if model not in WHISPER_MODELS:
+            raise ValueError("Choose one of the available Whisper models")
+        self.config.whisper.model = model
+        save_config(self.config)
 
     def create_session(self, name: str) -> Path:
         return self.session.create_session(name)

@@ -22,6 +22,12 @@ class DashboardApi:
         start_index = max(0, len(all_entries) - 400)
         return {
             "status": self.controller.status(),
+            "whisper": {
+                "model": self.controller.config.whisper.model,
+                "available_models": ["large-v3-turbo", "distil-large-v3", "medium", "small"],
+                "active_device": self.controller.engine.active_device,
+                "is_active": self.controller.is_listening,
+            },
             "vault_path": self.controller.config.vault.directory,
             "entries": [
                 {"index": index, "source": entry.source, "text": entry.text, "time": entry.display_time, "timestamp": entry.timestamp}
@@ -62,6 +68,10 @@ class DashboardApi:
     def save_hotkeys(self, capture_event: str, new_scene: str) -> dict[str, str]:
         self.controller.update_hotkeys(capture_event, new_scene)
         return {"message": "Shortcuts saved."}
+
+    def save_whisper_model(self, model: str) -> dict[str, str]:
+        self.controller.update_whisper_model(model)
+        return {"message": "Whisper model saved. It will be used the next time you start the relay listener."}
 
     def rename_session(self, name: str) -> dict[str, str]:
         cleaned = " ".join(name.split())
