@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "valr-companion"
+version = "0.1.0"
+description = "Local Discord D&D transcription and ChatGPT clipboard handoff"
+requires-python = ">=3.12"
+dependencies = [
+  "faster-whisper>=1.1.0",
+  "discord.py[voice]>=2.5.0",
+  # PR #54 adds DAVE decryption and guards against malformed non-audio
+  # packets. Pin it until the upstream project releases the fix.
+  "discord-ext-voice-recv @ git+https://github.com/imayhaveborkedit/discord-ext-voice-recv.git@ddd28601fe556f585b869e215f29c8236b95f88f",
+  "keyboard>=0.13.5",
+  "numpy>=1.26",
+  "pyperclip>=1.9.0",
+  "pywebview>=6.2.1",
+  "PyYAML>=6.0.2",
+  "websockets>=15,<16",
+]
+
+[project.scripts]
+valr-companion = "app.main:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

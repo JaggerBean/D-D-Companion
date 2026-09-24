@@ -1,0 +1,11 @@
+.venv/
+vendor/
+*.egg-info/
+__pycache__/
+*.pyc
+logs/
+sessions/
+config/discord.env
+config/relay.env
+config/speakers.yaml
+*.zip

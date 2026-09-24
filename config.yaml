@@ -1,0 +1,55 @@
+audio:
+  capture_system_audio: false
+  capture_microphone: false
+  output_device: auto
+  microphone_device: auto
+  sample_rate: 48000
+  channels: 1
+  chunk_seconds: 4.0
+  chunk_overlap_seconds: 1.0
+  speech_threshold_db: -42.0
+  utterance_silence_seconds: 0.8
+  max_utterance_seconds: 18.0
+  utterance_preroll_seconds: 0.25
+whisper:
+  model: large-v3-turbo
+  device: cuda
+  compute_type: float16
+  language: en
+  vad: true
+context:
+  recent_seconds: 900
+  important_note_seconds: 30
+  scene_dialogue_words: 1800
+  max_prompt_words: 3600
+hotkeys:
+  roleplay: f8
+  tactics: f7
+  knowledge: f6
+  questions: f5
+  mark_important: f9
+  control_panel: f10
+  quick_roleplay: ctrl+f8
+  capture_event: q
+  new_scene: ctrl+alt+s
+chatgpt:
+  focus_window: true
+  window_title_contains: ChatGPT
+character:
+  directory: ./character
+  include_summary_in_prompt: false
+discord:
+  enabled: true
+  token_file: ./config/discord.env
+  application_guild_id: ''
+  auto_join_voice_channel_id: ''
+  speaker_map_file: ./config/speakers.yaml
+  controller_user_ids: []
+relay:
+  enabled: true
+  endpoint: wss://dnd.stepcraft.org
+  room: obsidian-kingdom
+  token_file: ./config/relay.env
+vault:
+  directory: C:\Users\Jagge\Desktop\Stormdagger Isles Tester
+setup_completed: true
