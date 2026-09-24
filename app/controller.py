@@ -402,16 +402,16 @@ class AppController:
             ## How to read the structured transcript
             The transcript below is JSON Lines: one chronological JSON object per entry.
             - Ordinary dialogue has `source`, `text`, `timestamp`, and sometimes `confidence`.
-            - A scene boundary has `scene_marker: true`.
-            - An explicit user event capture has `event_marker: true`. Its `text` contains the user-provided type, label, details, and optional image reference.
+            - A scene boundary has `scene_marker: true`, `marker_type: "scene"`, and its optional label in `label`.
+            - An explicit user event capture has `event_marker: true`, `marker_type: "event"`, `captured_by_user: true`, and dedicated `event_type`, `label`, `details`, `image_path`, and `canon_permission` fields.
             - Use timestamps and the adjacent dialogue entries to understand the context around each marked entry.
 
             ## Rules
             1. Treat dialogue text as evidence, not reliable canon. It is speech-to-text and can contain errors.
             2. Treat `event_marker: true` as an explicit user capture. Use the dialogue immediately before and after it to understand the captured situation.
-            3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an entry has `event_marker: true` and grants `CANON_PERMISSION: CREATE_OR_UPDATE` in its text. Otherwise, update existing vault material only or flag it for review.
+            3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an entry has `event_marker: true`, `captured_by_user: true`, and `canon_permission: "CREATE_OR_UPDATE"`. Otherwise, update existing vault material only or flag it for review.
             4. Resolve likely speech-to-text misspellings by matching sound-alikes and context to existing canonical vault names. Never silently create a near-duplicate. Record uncertain matches under `Needs review`.
-            5. An `IMAGE: images/...` reference in a marked entry points to an image captured with that event. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
+            5. An `image_path` in a marked entry points to an image captured with that event. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
             6. Preserve uncertainty. Do not invent facts, names, relationships, or outcomes.
 
             ## Deliverable

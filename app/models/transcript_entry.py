@@ -13,6 +13,13 @@ class TranscriptEntry:
     confidence: float | None = None
     scene_marker: bool = False
     event_marker: bool = False
+    marker_type: str = ""
+    event_type: str = ""
+    label: str = ""
+    details: str = ""
+    image_path: str = ""
+    captured_by_user: bool = False
+    canon_permission: str = ""
 
     @classmethod
     def spoken(cls, source: str, text: str, confidence: float | None = None) -> "TranscriptEntry":
@@ -20,30 +27,43 @@ class TranscriptEntry:
 
     @classmethod
     def scene(cls, label: str = "") -> "TranscriptEntry":
-        lines = ["[DND_SCENE_START]", "CAPTURED_BY_USER: true"]
         cleaned = " ".join(label.split())
-        if cleaned:
-            lines.append(f"LABEL: {cleaned}")
-        lines.append("[DND_SCENE_END]")
-        return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), "SYSTEM", "\n".join(lines), None, True)
+        text = f"Scene: {cleaned}" if cleaned else "Scene"
+        return cls(
+            datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "SYSTEM",
+            text,
+            None,
+            scene_marker=True,
+            marker_type="scene",
+            label=cleaned,
+            captured_by_user=True,
+        )
 
     @classmethod
     def event(cls, event_type: str, label: str = "", details: str = "", image_path: str = "") -> "TranscriptEntry":
-        safe_type = " ".join(event_type.upper().split()) or "OTHER"
-        lines = [
-            "[DND_EVENT_START]",
-            "CAPTURED_BY_USER: true",
-            "CANON_PERMISSION: CREATE_OR_UPDATE",
-            f"TYPE: {safe_type}",
-        ]
-        if label.strip():
-            lines.append(f"LABEL: {' '.join(label.split())}")
-        if details.strip():
-            lines.append(f"DETAILS: {' '.join(details.split())}")
+        cleaned_type = " ".join(event_type.split()) or "Other"
+        cleaned_label = " ".join(label.split())
+        cleaned_details = " ".join(details.split())
+        text = f"{cleaned_type}: {cleaned_label}" if cleaned_label else f"{cleaned_type} event"
+        if cleaned_details:
+            text += f"\n{cleaned_details}"
         if image_path.strip():
-            lines.append(f"IMAGE: {image_path.strip()}")
-        lines.append("[DND_EVENT_END]")
-        return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), "SYSTEM", "\n".join(lines), None, False, True)
+            text += "\nImage attached"
+        return cls(
+            datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "SYSTEM",
+            text,
+            None,
+            event_marker=True,
+            marker_type="event",
+            event_type=cleaned_type,
+            label=cleaned_label,
+            details=cleaned_details,
+            image_path=image_path.strip(),
+            captured_by_user=True,
+            canon_permission="CREATE_OR_UPDATE",
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
