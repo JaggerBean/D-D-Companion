@@ -382,11 +382,15 @@ class AppController:
             self._window_callback()
 
     def open_session_folder(self) -> None:
-        if self.session.session_dir:
+        self._ensure_session()
+        assert self.session.session_dir is not None
+        try:
             if hasattr(os, "startfile"):
-                os.startfile(self.session.session_dir)
+                os.startfile(str(self.session.session_dir))
             else:
                 LOGGER.info("Session folder: %s", self.session.session_dir)
+        except OSError as exc:
+            raise RuntimeError(f"Could not open the session folder: {exc}") from exc
 
     def session_processing_prompt(self) -> str:
         """Build a self-contained prompt that can be pasted directly into ChatGPT."""
