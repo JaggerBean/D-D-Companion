@@ -11,7 +11,7 @@ import threading
 from uuid import uuid4
 from pathlib import Path
 
-from app.config import AppConfig, ROOT, resolve_character_dir, save_config
+from app.config import AppConfig, CampaignConfig, ROOT, resolve_character_dir, save_config
 from app.context.notes_manager import NotesManager
 from app.context.transcript_manager import SessionManager
 from app.hotkeys.hotkey_manager import HotkeyManager
@@ -27,7 +27,7 @@ WHISPER_MODELS = ("large-v3-turbo", "distil-large-v3", "medium", "small")
 class AppController:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
-        self.session = SessionManager(ROOT / "sessions")
+        self.session = SessionManager(self._campaign_sessions_root())
         self.notes = NotesManager(self.session)
         self.engine = WhisperEngine(config.whisper, ROOT / "config" / "vocabulary.txt")
         self.worker = TranscriptionWorker(config, self.engine, self._on_entry)
@@ -50,6 +50,63 @@ class AppController:
 
     def active_scene(self) -> dict[str, str] | None:
         return dict(self._active_scene) if self._active_scene else None
+
+    def _campaign(self) -> CampaignConfig:
+        for campaign in self.config.campaigns:
+            if campaign.id == self.config.active_campaign_id:
+                return campaign
+        self.config.active_campaign_id = self.config.campaigns[0].id
+        return self.config.campaigns[0]
+
+    def _campaign_sessions_root(self) -> Path:
+        campaign = self._campaign()
+        # Existing installs retain their historical session folder; every new
+        # campaign gets an isolated subfolder and its own session database.
+        if campaign.id == "default":
+            return ROOT / "sessions"
+        return ROOT / "sessions" / campaign.id
+
+    def campaigns(self) -> list[dict[str, object]]:
+        return [
+            {
+                "id": campaign.id,
+                "name": campaign.name,
+                "vault_directory": campaign.vault_directory,
+                "active": campaign.id == self.config.active_campaign_id,
+            }
+            for campaign in self.config.campaigns
+        ]
+
+    def create_campaign(self, name: str) -> CampaignConfig:
+        if self.is_listening:
+            raise RuntimeError("Stop the listener before creating a campaign")
+        cleaned = " ".join(name.split())
+        if not cleaned:
+            raise ValueError("Give the campaign a name")
+        if len(cleaned) > 100:
+            raise ValueError("Campaign names must be 100 characters or fewer")
+        campaign = CampaignConfig(name=cleaned)
+        self.config.campaigns.append(campaign)
+        self.config.active_campaign_id = campaign.id
+        self._active_scene = None
+        self.session = SessionManager(self._campaign_sessions_root())
+        self.notes = NotesManager(self.session)
+        save_config(self.config)
+        return campaign
+
+    def switch_campaign(self, campaign_id: str) -> None:
+        if self.is_listening:
+            raise RuntimeError("Stop the listener before switching campaigns")
+        campaign_id = campaign_id.strip()
+        if campaign_id not in {campaign.id for campaign in self.config.campaigns}:
+            raise ValueError("That campaign is no longer available")
+        if campaign_id == self.config.active_campaign_id:
+            return
+        self.config.active_campaign_id = campaign_id
+        self._active_scene = None
+        self.session = SessionManager(self._campaign_sessions_root())
+        self.notes = NotesManager(self.session)
+        save_config(self.config)
 
     def set_show_window_callback(self, callback: object) -> None:
         self._window_callback = callback
@@ -141,7 +198,7 @@ class AppController:
         path = Path(directory).expanduser().resolve()
         if not path.is_dir():
             raise ValueError("Choose an existing Obsidian vault folder")
-        self.config.vault.directory = str(path)
+        self._campaign().vault_directory = str(path)
         save_config(self.config)
 
     def create_vault_directory(self, parent_directory: str, name: str) -> Path:
@@ -177,7 +234,7 @@ class AppController:
             )
         except OSError as exc:
             raise RuntimeError(f"Could not create the vault: {exc}") from exc
-        self.config.vault.directory = str(vault)
+        self._campaign().vault_directory = str(vault)
         save_config(self.config)
         return vault
 
@@ -267,8 +324,8 @@ class AppController:
                     "name": name,
                     "avatar": member.get("avatar", ""),
                 }
-                if member_id not in self.config.participants:
-                    self.config.participants[member_id] = {"nickname": "", "enabled": True, "icon": ""}
+                if member_id not in self._campaign().participants:
+                    self._campaign().participants[member_id] = {"nickname": "", "enabled": True, "icon": ""}
                     changed = True
         if changed:
             save_config(self.config)
@@ -282,10 +339,10 @@ class AppController:
             current = self._voice_members.get(member_id, {"id": member_id, "name": name, "avatar": ""})
             current["name"] = name
             self._voice_members[member_id] = current
-            profile = self.config.participants.get(member_id)
+            profile = self._campaign().participants.get(member_id)
             if not isinstance(profile, dict):
                 profile = {"nickname": "", "enabled": True, "icon": ""}
-                self.config.participants[member_id] = profile
+                self._campaign().participants[member_id] = profile
                 changed = True
             enabled = bool(profile.get("enabled", True))
             source = str(profile.get("nickname", "")).strip() or name
@@ -297,7 +354,7 @@ class AppController:
     def participants(self) -> list[dict[str, object]]:
         with self._participants_lock:
             members = list(self._voice_members.values())
-            profiles = dict(self.config.participants)
+            profiles = dict(self._campaign().participants)
         # Before the first roster packet arrives, keep speakers who have already
         # talked visible so their settings remain reachable.
         if not members:
@@ -324,7 +381,7 @@ class AppController:
         if len(cleaned_name) > 80:
             raise ValueError("Nicknames must be 80 characters or fewer")
         with self._participants_lock:
-            profile = self.config.participants.setdefault(cleaned_id, {"nickname": "", "enabled": True, "icon": ""})
+            profile = self._campaign().participants.setdefault(cleaned_id, {"nickname": "", "enabled": True, "icon": ""})
             previous_nickname = str(profile.get("nickname", "")).strip()
             member_name = str(self._voice_members.get(cleaned_id, {}).get("name", "")).strip()
             profile["nickname"] = cleaned_name
@@ -344,8 +401,7 @@ class AppController:
         path = ROOT / relative_path
         return path.resolve().as_uri() if path.is_file() else ""
 
-    @staticmethod
-    def _save_participant_icon(member_id: str, data_url: str) -> str:
+    def _save_participant_icon(self, member_id: str, data_url: str) -> str:
         try:
             header, encoded = data_url.split(",", 1)
             mime = header[5:].split(";", 1)[0].lower()
@@ -356,7 +412,7 @@ class AppController:
         if mime not in suffixes or not data or len(data) > 2 * 1024 * 1024:
             raise ValueError("Use a PNG, JPG, WebP, or GIF image smaller than 2 MB")
         safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", member_id)[:80] or "participant"
-        folder = ROOT / "config" / "participant-icons"
+        folder = ROOT / "config" / "participant-icons" / self._campaign().id
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{safe_id}{suffixes[mime]}"
         path.write_bytes(data)
@@ -463,7 +519,7 @@ class AppController:
         notes = notes_path.read_text(encoding="utf-8") if notes_path.exists() else ""
         images = sorted((session_dir / "images").glob("*")) if (session_dir / "images").exists() else []
         image_list = "\n".join(f"- {image}" for image in images) or "- No event images were attached."
-        vault_directory = self.config.vault.directory or "[No Obsidian vault folder has been selected yet.]"
+        vault_directory = self._campaign().vault_directory or "[No Obsidian vault folder has been selected yet.]"
         return textwrap.dedent(
             f"""\
             # D&D Session → Obsidian Vault Processing Request

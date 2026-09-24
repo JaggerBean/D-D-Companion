@@ -30,8 +30,10 @@ class DashboardApi:
                 "active_device": self.controller.engine.active_device,
                 "is_active": self.controller.is_listening,
             },
-            "vault_path": self.controller.config.vault.directory,
-            "vault_setup_required": not bool(self.controller.config.vault.directory),
+            "vault_path": self.controller._campaign().vault_directory,
+            "vault_setup_required": not bool(self.controller._campaign().vault_directory),
+            "campaigns": self.controller.campaigns(),
+            "active_campaign": self.controller._campaign().name,
             "ai_instructions": self.controller.config.ai.instructions,
             "entries": [
                 {"index": index, "source": entry.source, "text": entry.text, "time": entry.display_time, "timestamp": entry.timestamp}
@@ -143,6 +145,14 @@ class DashboardApi:
     def save_ai_instructions(self, instructions: str) -> dict[str, str]:
         self.controller.update_ai_instructions(instructions)
         return {"message": "AI instructions saved in D&D Companion."}
+
+    def create_campaign(self, name: str) -> dict[str, str]:
+        campaign = self.controller.create_campaign(name)
+        return {"message": f"Campaign created: {campaign.name}. Set up its vault to continue."}
+
+    def switch_campaign(self, campaign_id: str) -> dict[str, str]:
+        self.controller.switch_campaign(campaign_id)
+        return {"message": f"Switched to {self.controller._campaign().name}."}
 
     def get_debug_log(self) -> str:
         path = ROOT / "logs" / "app.log"

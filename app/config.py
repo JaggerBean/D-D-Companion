@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import sys
 from typing import Any
+from uuid import uuid4
 
 import yaml
 
@@ -104,6 +105,18 @@ class VaultConfig:
     directory: str = ""
 
 
+@dataclass
+class CampaignConfig:
+    id: str = field(default_factory=lambda: uuid4().hex)
+    name: str = "D&D Campaign"
+    vault_directory: str = ""
+    participants: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+def default_campaigns() -> list[CampaignConfig]:
+    return [CampaignConfig()]
+
+
 def default_ai_instructions() -> str:
     """Default guidance included with every copied session-processing prompt."""
     return """## Processing rules
@@ -140,6 +153,8 @@ class AppConfig:
     vault: VaultConfig = field(default_factory=VaultConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     participants: dict[str, dict[str, Any]] = field(default_factory=dict)
+    campaigns: list[CampaignConfig] = field(default_factory=default_campaigns)
+    active_campaign_id: str = ""
     setup_completed: bool = False
 
 
@@ -165,7 +180,29 @@ def load_config(path: Path | None = None) -> AppConfig:
         # list means the user intentionally removed every shortcut.
         if "shortcuts" not in hotkeys_data:
             hotkeys.shortcuts = default_shortcuts(hotkeys.capture_event, hotkeys.new_scene)
-        return AppConfig(
+        campaigns_raw = raw.get("campaigns")
+        migrated_campaigns = not (isinstance(campaigns_raw, list) and campaigns_raw)
+        if isinstance(campaigns_raw, list) and campaigns_raw:
+            campaigns = [
+                _section(CampaignConfig, item)
+                for item in campaigns_raw
+                if isinstance(item, dict)
+            ]
+            campaigns = [campaign for campaign in campaigns if campaign.id.strip()]
+        else:
+            # Preserve all data from installations that predate campaigns.
+            campaigns = [CampaignConfig(
+                id="default",
+                name="D&D Campaign",
+                vault_directory=_section(VaultConfig, raw.get("vault")).directory,
+                participants=raw.get("participants") if isinstance(raw.get("participants"), dict) else {},
+            )]
+        if not campaigns:
+            campaigns = default_campaigns()
+        active_campaign_id = str(raw.get("active_campaign_id", "")).strip()
+        if active_campaign_id not in {campaign.id for campaign in campaigns}:
+            active_campaign_id = campaigns[0].id
+        config = AppConfig(
             audio=_section(AudioConfig, raw.get("audio")),
             whisper=_section(WhisperConfig, raw.get("whisper")),
             context=_section(ContextConfig, raw.get("context")),
@@ -177,8 +214,13 @@ def load_config(path: Path | None = None) -> AppConfig:
             vault=_section(VaultConfig, raw.get("vault")),
             ai=_section(AIConfig, raw.get("ai")),
             participants=raw.get("participants") if isinstance(raw.get("participants"), dict) else {},
+            campaigns=campaigns,
+            active_campaign_id=active_campaign_id,
             setup_completed=bool(raw.get("setup_completed", False)),
         )
+        if migrated_campaigns:
+            save_config(config, path)
+        return config
     except (OSError, yaml.YAMLError, TypeError, ValueError) as exc:
         raise ValueError(f"Cannot read configuration {path}: {exc}") from exc
 
