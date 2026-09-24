@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,18 @@ class DashboardApi:
 
 def run_dashboard(controller: AppController) -> None:
     import webview
+
+    # The taskbar otherwise groups this source-installed app with pythonw.exe
+    # and shows Python's icon instead of the D&D Companion window icon.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "ObsidianKingdom.DNDCompanion"
+            )
+        except Exception:
+            pass
 
     frontend = ROOT / "app" / "ui" / "web" / "index.html"
     if not frontend.exists():
