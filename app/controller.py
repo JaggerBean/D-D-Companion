@@ -30,6 +30,16 @@ class AppController:
         self.session = SessionManager(self._campaign_sessions_root())
         self.notes = NotesManager(self.session)
         self.engine = WhisperEngine(config.whisper, ROOT / "config" / "vocabulary.txt")
+        # Move the former app-wide vocabulary into the migrated default
+        # campaign once, so old names are retained without bleeding into other
+        # campaigns.
+        campaign = self._campaign()
+        legacy_vocabulary = ROOT / "config" / "vocabulary.txt"
+        if campaign.id == "default" and not campaign.vocabulary and legacy_vocabulary.exists():
+            campaign.vocabulary = legacy_vocabulary.read_text(encoding="utf-8").strip()
+            if campaign.vocabulary:
+                save_config(self.config)
+        self.engine.vocabulary_text = self._campaign().vocabulary
         self.worker = TranscriptionWorker(config, self.engine, self._on_entry)
         self.hotkeys = HotkeyManager(config.hotkeys, self._run_shortcut)
         self.updates = UpdateManager()
@@ -91,6 +101,7 @@ class AppController:
         self._active_scene = None
         self.session = SessionManager(self._campaign_sessions_root())
         self.notes = NotesManager(self.session)
+        self.engine.vocabulary_text = campaign.vocabulary
         save_config(self.config)
         return campaign
 
@@ -106,6 +117,20 @@ class AppController:
         self._active_scene = None
         self.session = SessionManager(self._campaign_sessions_root())
         self.notes = NotesManager(self.session)
+        self.engine.vocabulary_text = self._campaign().vocabulary
+        save_config(self.config)
+
+    def update_campaign_vocabulary(self, vocabulary: str) -> None:
+        if len(vocabulary) > 12_000:
+            raise ValueError("Keep campaign vocabulary under 12,000 characters")
+        self._campaign().vocabulary = vocabulary.strip()
+        self.engine.vocabulary_text = self._campaign().vocabulary
+        save_config(self.config)
+
+    def update_campaign_ai_context(self, context: str) -> None:
+        if len(context) > 24_000:
+            raise ValueError("Keep campaign context under 24,000 characters")
+        self._campaign().ai_context = context.strip()
         save_config(self.config)
 
     def set_show_window_callback(self, callback: object) -> None:
@@ -537,6 +562,9 @@ class AppController:
             Place the proposed Markdown files and edits in this vault:
             {vault_directory}
             If no vault folder is configured, ask me to select one before giving final file paths.
+
+            ## Campaign-specific context
+            {self._campaign().ai_context or '[No campaign-specific context has been added yet.]'}
 
             Event images saved for this session:
             {image_list}

@@ -111,6 +111,8 @@ class CampaignConfig:
     name: str = "D&D Campaign"
     vault_directory: str = ""
     participants: dict[str, dict[str, Any]] = field(default_factory=dict)
+    vocabulary: str = ""
+    ai_context: str = ""
 
 
 def default_campaigns() -> list[CampaignConfig]:

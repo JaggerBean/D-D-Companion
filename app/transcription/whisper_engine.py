@@ -18,6 +18,7 @@ LOGGER = logging.getLogger(__name__)
 class WhisperEngine:
     def __init__(self, config: WhisperConfig, vocabulary_file: Path) -> None:
         self.config, self.vocabulary_file = config, vocabulary_file
+        self.vocabulary_text = ""
         self.model = None
         self.active_device = "not loaded"
         self._cuda_dll_directory = None
@@ -109,7 +110,6 @@ class WhisperEngine:
         )
 
     def _vocabulary_prompt(self) -> str:
-        if not self.vocabulary_file.exists():
-            return ""
-        names = [line.strip() for line in self.vocabulary_file.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+        text = self.vocabulary_text
+        names = [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
         return "Names and terms used in this D&D session: " + ", ".join(names[:100])

@@ -34,6 +34,8 @@ class DashboardApi:
             "vault_setup_required": not bool(self.controller._campaign().vault_directory),
             "campaigns": self.controller.campaigns(),
             "active_campaign": self.controller._campaign().name,
+            "campaign_vocabulary": self.controller._campaign().vocabulary,
+            "campaign_ai_context": self.controller._campaign().ai_context,
             "ai_instructions": self.controller.config.ai.instructions,
             "entries": [
                 {"index": index, "source": entry.source, "text": entry.text, "time": entry.display_time, "timestamp": entry.timestamp}
@@ -153,6 +155,14 @@ class DashboardApi:
     def switch_campaign(self, campaign_id: str) -> dict[str, str]:
         self.controller.switch_campaign(campaign_id)
         return {"message": f"Switched to {self.controller._campaign().name}."}
+
+    def save_campaign_vocabulary(self, vocabulary: str) -> dict[str, str]:
+        self.controller.update_campaign_vocabulary(vocabulary)
+        return {"message": "Campaign vocabulary saved."}
+
+    def save_campaign_ai_context(self, context: str) -> dict[str, str]:
+        self.controller.update_campaign_ai_context(context)
+        return {"message": "Campaign context saved."}
 
     def get_debug_log(self) -> str:
         path = ROOT / "logs" / "app.log"
