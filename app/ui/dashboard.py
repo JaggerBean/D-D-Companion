@@ -41,6 +41,7 @@ class DashboardApi:
                 "shortcuts": self.controller.config.hotkeys.shortcuts,
             },
             "participants": self.controller.participants(),
+            "update": self.controller.updates.status(),
         }
 
     def start_bot(self) -> dict[str, str]:
@@ -108,6 +109,13 @@ class DashboardApi:
         self.controller.copy_session_processing_prompt()
         return {"message": "AI session prompt copied. Paste it into ChatGPT; attach any event images you want it to inspect."}
 
+    def check_for_updates(self) -> dict[str, object]:
+        return self.controller.check_for_updates()
+
+    def install_update(self) -> dict[str, object]:
+        status = self.controller.install_update()
+        return {"message": str(status.get("message", "Update installer started."))}
+
     def choose_vault_folder(self) -> dict[str, str]:
         if not self._window:
             raise RuntimeError("The folder chooser is not ready yet")
@@ -162,6 +170,7 @@ def run_dashboard(controller: AppController) -> None:
         )
     )
     controller.hotkeys.start()
+    controller.check_for_updates_async()
     window.events.closed += lambda *_args: controller.shutdown()
     icon = ROOT / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)

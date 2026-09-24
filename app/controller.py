@@ -18,6 +18,7 @@ from app.hotkeys.hotkey_manager import HotkeyManager
 from app.models.transcript_entry import TranscriptEntry
 from app.transcription.whisper_engine import WhisperEngine
 from app.transcription.worker import TranscriptionWorker
+from app.update_manager import UpdateManager
 
 LOGGER = logging.getLogger(__name__)
 WHISPER_MODELS = ("large-v3-turbo", "distil-large-v3", "medium", "small")
@@ -31,6 +32,7 @@ class AppController:
         self.engine = WhisperEngine(config.whisper, ROOT / "config" / "vocabulary.txt")
         self.worker = TranscriptionWorker(config, self.engine, self._on_entry)
         self.hotkeys = HotkeyManager(config.hotkeys, self._run_shortcut)
+        self.updates = UpdateManager()
         self._window_callback = None
         self._capture_menu_callback = None
         self._scene_menu_callback = None
@@ -141,6 +143,15 @@ class AppController:
             raise ValueError("Choose an existing Obsidian vault folder")
         self.config.vault.directory = str(path)
         save_config(self.config)
+
+    def check_for_updates(self) -> dict[str, object]:
+        return self.updates.check()
+
+    def check_for_updates_async(self) -> None:
+        self.updates.check_async()
+
+    def install_update(self) -> dict[str, object]:
+        return self.updates.install()
 
     def start_listening(self) -> None:
         self._ensure_session()
