@@ -189,7 +189,10 @@ def run_dashboard(controller: AppController) -> None:
         except Exception:
             pass
 
-    frontend = ROOT / "app" / "ui" / "web" / "index.html"
+    # PyInstaller's one-folder bundle puts app data under _internal while
+    # ROOT intentionally remains the install folder for user settings.
+    bundle_root = ROOT / "_internal" if getattr(sys, "frozen", False) else ROOT
+    frontend = bundle_root / "app" / "ui" / "web" / "index.html"
     if not frontend.exists():
         raise RuntimeError("Dashboard files are missing. Run setup.bat again.")
     dashboard_api = DashboardApi(controller)
@@ -209,5 +212,5 @@ def run_dashboard(controller: AppController) -> None:
     controller.hotkeys.start()
     controller.check_for_updates_async()
     window.events.closed += lambda *_args: controller.shutdown()
-    icon = ROOT / "app" / "assets" / "dnd-companion.ico"
+    icon = bundle_root / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)
