@@ -56,6 +56,17 @@ class HotkeysConfig:
     quick_roleplay: str = "ctrl+f8"
     capture_event: str = "ctrl+alt+m"
     new_scene: str = "ctrl+alt+s"
+    # Kept alongside the two legacy fields so existing installations can be
+    # upgraded without losing their chosen Event and Scene combinations.
+    shortcuts: list[dict[str, Any]] = field(default_factory=lambda: default_shortcuts())
+
+
+def default_shortcuts(capture_event: str = "ctrl+alt+m", new_scene: str = "ctrl+alt+s") -> list[dict[str, Any]]:
+    """The initial shortcuts shown on upgraded and first-run installations."""
+    return [
+        {"id": "event-default", "action": "event", "event_type": "NPC", "keys": capture_event, "enabled": True},
+        {"id": "scene-default", "action": "scene", "event_type": "", "keys": new_scene, "enabled": True},
+    ]
 
 
 @dataclass
@@ -124,11 +135,17 @@ def load_config(path: Path | None = None) -> AppConfig:
         return cfg
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        hotkeys_data = raw.get("hotkeys") if isinstance(raw.get("hotkeys"), dict) else {}
+        hotkeys = _section(HotkeysConfig, hotkeys_data)
+        # An absent setting means this is an older config. An explicitly empty
+        # list means the user intentionally removed every shortcut.
+        if "shortcuts" not in hotkeys_data:
+            hotkeys.shortcuts = default_shortcuts(hotkeys.capture_event, hotkeys.new_scene)
         return AppConfig(
             audio=_section(AudioConfig, raw.get("audio")),
             whisper=_section(WhisperConfig, raw.get("whisper")),
             context=_section(ContextConfig, raw.get("context")),
-            hotkeys=_section(HotkeysConfig, raw.get("hotkeys")),
+            hotkeys=hotkeys,
             chatgpt=_section(ChatGPTConfig, raw.get("chatgpt")),
             character=_section(CharacterConfig, raw.get("character")),
             discord=_section(DiscordConfig, raw.get("discord")),

@@ -1,6 +1,7 @@
 """React dashboard bridge. No browser server or external service is used."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -35,8 +36,7 @@ class DashboardApi:
             ],
             "notes": self.controller.session.notes(),
             "hotkeys": {
-                "capture_event": self.controller.config.hotkeys.capture_event,
-                "new_scene": self.controller.config.hotkeys.new_scene,
+                "shortcuts": self.controller.config.hotkeys.shortcuts,
             },
             "participants": self.controller.participants(),
         }
@@ -74,8 +74,8 @@ class DashboardApi:
         self.controller.update_participant(member_id, nickname, enabled, icon_data, clear_icon)
         return {"message": "Participant settings saved."}
 
-    def save_hotkeys(self, capture_event: str, new_scene: str) -> dict[str, str]:
-        self.controller.update_hotkeys(capture_event, new_scene)
+    def save_shortcuts(self, shortcuts: list[dict[str, object]]) -> dict[str, str]:
+        self.controller.update_shortcuts(shortcuts)
         return {"message": "Shortcuts saved."}
 
     def save_whisper_model(self, model: str) -> dict[str, str]:
@@ -132,7 +132,12 @@ def run_dashboard(controller: AppController) -> None:
     window = webview.create_window("D&D Companion", frontend.as_uri(), js_api=dashboard_api, width=1280, height=760, min_size=(760, 540))
     dashboard_api.set_window(window)
     controller.set_show_window_callback(lambda: window.show())
-    controller.set_capture_menu_callback(lambda: window.evaluate_js("window.dispatchEvent(new Event('dnd-open-capture'))"))
+    controller.set_capture_menu_callback(
+        lambda event_type="": window.evaluate_js(
+            f"window.dispatchEvent(new CustomEvent('dnd-open-capture', {{detail: {json.dumps(event_type)}}}))"
+        )
+    )
+    controller.set_scene_menu_callback(lambda: window.evaluate_js("window.dispatchEvent(new Event('dnd-open-scene'))"))
     window.events.closed += lambda *_args: controller.shutdown()
     icon = ROOT / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)

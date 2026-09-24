@@ -8,6 +8,7 @@ import textwrap
 import base64
 import re
 import threading
+from uuid import uuid4
 from pathlib import Path
 
 from app.config import AppConfig, ROOT, resolve_character_dir, save_config
@@ -29,12 +30,10 @@ class AppController:
         self.notes = NotesManager(self.session)
         self.engine = WhisperEngine(config.whisper, ROOT / "config" / "vocabulary.txt")
         self.worker = TranscriptionWorker(config, self.engine, self._on_entry)
-        self.hotkeys = HotkeyManager(config.hotkeys, {
-            "capture_event": self.open_capture_menu,
-            "new_scene": self.new_scene,
-        })
+        self.hotkeys = HotkeyManager(config.hotkeys, self._run_shortcut)
         self._window_callback = None
         self._capture_menu_callback = None
+        self._scene_menu_callback = None
         self.last_handoff = ""
         self.discord_router = None
         self.discord_bot = None
@@ -52,18 +51,58 @@ class AppController:
     def set_capture_menu_callback(self, callback: object) -> None:
         self._capture_menu_callback = callback
 
-    def update_hotkeys(self, capture_event: str, new_scene: str) -> None:
-        capture_event, new_scene = capture_event.strip(), new_scene.strip()
-        if not capture_event or not new_scene:
-            raise ValueError("Both shortcuts need a key combination.")
+    def set_scene_menu_callback(self, callback: object) -> None:
+        self._scene_menu_callback = callback
+
+    def update_shortcuts(self, shortcuts: object) -> None:
+        if not isinstance(shortcuts, list):
+            raise ValueError("Shortcut settings could not be read.")
+        allowed_actions = {"event", "scene", "listener"}
+        allowed_event_types = {"NPC", "Lore", "Location", "Item", "Quest / Lead", "Faction", "Other"}
+        cleaned: list[dict[str, object]] = []
+        used_keys: set[str] = set()
+        for raw in shortcuts[:24]:
+            if not isinstance(raw, dict):
+                continue
+            action = str(raw.get("action", "event")).strip().lower()
+            if action not in allowed_actions:
+                raise ValueError("Choose Event, Scene, or Listener for every shortcut.")
+            keys = str(raw.get("keys", "")).strip().lower()
+            enabled = bool(raw.get("enabled", True))
+            if enabled and not keys:
+                raise ValueError("Every enabled shortcut needs a key combination.")
+            if enabled and keys in used_keys:
+                raise ValueError("Each enabled shortcut must use a different key combination.")
+            used_keys.add(keys)
+            event_type = str(raw.get("event_type", "Other")).strip()
+            if action == "event" and event_type not in allowed_event_types:
+                event_type = "Other"
+            cleaned.append({
+                "id": str(raw.get("id", "")).strip() or uuid4().hex,
+                "action": action,
+                "event_type": event_type if action == "event" else "",
+                "keys": keys,
+                "enabled": enabled,
+            })
         was_running = self.worker.running
         if was_running:
             self.hotkeys.stop()
-        self.config.hotkeys.capture_event = capture_event
-        self.config.hotkeys.new_scene = new_scene
+        self.config.hotkeys.shortcuts = cleaned
         save_config(self.config)
         if was_running:
             self.hotkeys.start()
+
+    def _run_shortcut(self, shortcut: dict[str, object]) -> None:
+        action = str(shortcut.get("action", ""))
+        if action == "event":
+            self.open_capture_menu(str(shortcut.get("event_type", "Other")))
+        elif action == "scene":
+            self.open_scene_menu()
+        elif action == "listener":
+            if self.is_listening:
+                self.stop_listening()
+            else:
+                self.start_listening()
 
     def update_whisper_model(self, model: str) -> None:
         if model not in WHISPER_MODELS:
@@ -288,10 +327,15 @@ class AppController:
         self.last_handoff = "Transcript entry updated"
         self._notify()
 
-    def open_capture_menu(self) -> None:
+    def open_capture_menu(self, event_type: str = "") -> None:
         self.show_window()
         if callable(self._capture_menu_callback):
-            self._capture_menu_callback()
+            self._capture_menu_callback(event_type)
+
+    def open_scene_menu(self) -> None:
+        self.show_window()
+        if callable(self._scene_menu_callback):
+            self._scene_menu_callback()
 
     def show_window(self) -> None:
         if callable(self._window_callback):
