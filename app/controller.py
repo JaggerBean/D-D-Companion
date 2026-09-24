@@ -144,6 +144,52 @@ class AppController:
         self.config.vault.directory = str(path)
         save_config(self.config)
 
+    def create_vault_directory(self, parent_directory: str, name: str) -> Path:
+        """Create a conservative, local-only starter structure for a new vault."""
+        parent = Path(parent_directory).expanduser().resolve()
+        cleaned_name = " ".join(name.split())
+        if not parent.is_dir():
+            raise ValueError("Choose a folder where the new vault should be created")
+        if not cleaned_name:
+            raise ValueError("Give the new vault a name")
+        if any(character in cleaned_name for character in '<>:"/\\|?*'):
+            raise ValueError("The vault name contains characters Windows cannot use")
+        vault = parent / cleaned_name
+        if vault.exists():
+            raise ValueError("A folder with that vault name already exists. Choose another name or select it as an existing vault.")
+        try:
+            vault.mkdir()
+            for folder in (
+                "Sessions",
+                "People",
+                "Locations",
+                "Factions",
+                "Lore",
+                "Items",
+                "Quests",
+                "Images",
+            ):
+                (vault / folder).mkdir()
+            (vault / "README.md").write_text(
+                "# " + cleaned_name + "\n\n"
+                "This vault was created by D&D Companion. Session notes and canonical campaign material can live here.\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise RuntimeError(f"Could not create the vault: {exc}") from exc
+        self.config.vault.directory = str(vault)
+        save_config(self.config)
+        return vault
+
+    def update_ai_instructions(self, instructions: str) -> None:
+        cleaned = instructions.strip()
+        if not cleaned:
+            raise ValueError("AI instructions cannot be empty")
+        if len(cleaned) > 24_000:
+            raise ValueError("Keep AI instructions under 24,000 characters")
+        self.config.ai.instructions = cleaned
+        save_config(self.config)
+
     def check_for_updates(self) -> dict[str, object]:
         return self.updates.check()
 
@@ -446,20 +492,7 @@ class AppController:
             - An explicit user event capture has `event_marker: true`, `marker_type: "event"`, `captured_by_user: true`, and dedicated `event_type`, `label`, `details`, `image_path`, and `canon_permission` fields.
             - Use timestamps and the adjacent dialogue entries to understand the context around each marked entry.
 
-            ## Rules
-            1. Treat dialogue text as evidence, not reliable canon. It is speech-to-text and can contain errors.
-            2. Treat `event_marker: true` as an explicit user capture. Use the dialogue immediately before and after it to understand the captured situation.
-            3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an entry has `event_marker: true`, `captured_by_user: true`, and `canon_permission: "CREATE_OR_UPDATE"`. Otherwise, update existing vault material only or flag it for review.
-            4. Resolve likely speech-to-text misspellings by matching sound-alikes and context to existing canonical vault names. Never silently create a near-duplicate. Record uncertain matches under `Needs review`.
-            5. An `image_path` in a marked entry points to an image captured with that event. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
-            6. Preserve uncertainty. Do not invent facts, names, relationships, or outcomes.
-
-            ## Deliverable
-            Return, in this order:
-            1. A concise session recap.
-            2. A marker-by-marker review: context, confidence, and whether it should create/update/review a vault note.
-            3. Obsidian-ready Markdown for the session note and only the entity-note updates authorized by user markers.
-            4. A `Needs review` list for uncertain names, details, or possible duplicate entities.
+            {self.config.ai.instructions}
 
             ## STRUCTURED TRANSCRIPT (JSONL)
             {transcript or '[No transcript has been recorded yet.]'}

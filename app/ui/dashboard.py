@@ -31,6 +31,8 @@ class DashboardApi:
                 "is_active": self.controller.is_listening,
             },
             "vault_path": self.controller.config.vault.directory,
+            "vault_setup_required": not bool(self.controller.config.vault.directory),
+            "ai_instructions": self.controller.config.ai.instructions,
             "entries": [
                 {"index": index, "source": entry.source, "text": entry.text, "time": entry.display_time, "timestamp": entry.timestamp}
                 for index, entry in enumerate(all_entries[start_index:], start=start_index)
@@ -126,6 +128,21 @@ class DashboardApi:
             return {"message": "Vault folder was not changed."}
         self.controller.set_vault_directory(str(selected[0]))
         return {"message": "Obsidian vault folder saved."}
+
+    def create_vault_folder(self, name: str) -> dict[str, str]:
+        if not self._window:
+            raise RuntimeError("The folder chooser is not ready yet")
+        import webview
+
+        selected = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+        if not selected:
+            return {"message": "Vault creation was cancelled."}
+        vault = self.controller.create_vault_directory(str(selected[0]), name)
+        return {"message": f"New Obsidian vault created: {vault.name}."}
+
+    def save_ai_instructions(self, instructions: str) -> dict[str, str]:
+        self.controller.update_ai_instructions(instructions)
+        return {"message": "AI instructions saved in D&D Companion."}
 
     def get_debug_log(self) -> str:
         path = ROOT / "logs" / "app.log"

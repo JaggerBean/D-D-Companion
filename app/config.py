@@ -104,6 +104,29 @@ class VaultConfig:
     directory: str = ""
 
 
+def default_ai_instructions() -> str:
+    """Default guidance included with every copied session-processing prompt."""
+    return """## Processing rules
+1. Treat dialogue text as evidence, not reliable canon. It is speech-to-text and can contain errors.
+2. Treat `event_marker: true` as an explicit user capture. Use the dialogue immediately before and after it to understand the captured situation.
+3. Only create a new NPC, location, faction, item, quest, lore entry, or event when an entry has `event_marker: true`, `captured_by_user: true`, and `canon_permission: \"CREATE_OR_UPDATE\"`. Otherwise, update existing vault material only or flag it for review.
+4. Resolve likely speech-to-text misspellings by matching sound-alikes and context to existing canonical vault names. Never silently create a near-duplicate. Record uncertain matches under `Needs review`.
+5. An `image_path` in a marked entry points to an image captured with that event. If that image is attached to this chat, use it as supporting evidence; do not infer details that are not visible or supported by the transcript.
+6. Preserve uncertainty. Do not invent facts, names, relationships, or outcomes.
+
+## Deliverable
+Return, in this order:
+1. A concise session recap.
+2. A marker-by-marker review: context, confidence, and whether it should create/update/review a vault note.
+3. Obsidian-ready Markdown for the session note and only the entity-note updates authorized by user markers.
+4. A `Needs review` list for uncertain names, details, or possible duplicate entities."""
+
+
+@dataclass
+class AIConfig:
+    instructions: str = field(default_factory=default_ai_instructions)
+
+
 @dataclass
 class AppConfig:
     audio: AudioConfig = field(default_factory=AudioConfig)
@@ -115,6 +138,7 @@ class AppConfig:
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
     vault: VaultConfig = field(default_factory=VaultConfig)
+    ai: AIConfig = field(default_factory=AIConfig)
     participants: dict[str, dict[str, Any]] = field(default_factory=dict)
     setup_completed: bool = False
 
@@ -151,6 +175,7 @@ def load_config(path: Path | None = None) -> AppConfig:
             discord=_section(DiscordConfig, raw.get("discord")),
             relay=_section(RelayConfig, raw.get("relay")),
             vault=_section(VaultConfig, raw.get("vault")),
+            ai=_section(AIConfig, raw.get("ai")),
             participants=raw.get("participants") if isinstance(raw.get("participants"), dict) else {},
             setup_completed=bool(raw.get("setup_completed", False)),
         )
