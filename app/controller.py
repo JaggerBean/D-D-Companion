@@ -142,10 +142,10 @@ class AppController:
         self.notes.add_manual(text)
         self.last_handoff = "Note saved"
 
-    def new_scene(self) -> None:
+    def new_scene(self, label: str = "") -> None:
         self._ensure_session()
-        self.session.add_entry(TranscriptEntry.scene())
-        self.last_handoff = "New scene marked"
+        self.session.add_entry(TranscriptEntry.scene(label))
+        self.last_handoff = "New scene marked" + (f": {' '.join(label.split())}" if label.strip() else "")
         self._notify()
 
     def add_event_marker(

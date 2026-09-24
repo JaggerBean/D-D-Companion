@@ -48,9 +48,9 @@ class DashboardApi:
         self.controller.stop_listening()
         return {"message": "Relay listener stopped."}
 
-    def new_scene(self) -> dict[str, str]:
-        self.controller.new_scene()
-        return {"message": "New scene marked."}
+    def new_scene(self, label: str = "") -> dict[str, str]:
+        self.controller.new_scene(label)
+        return {"message": "Scene marked." if not label.strip() else f"Scene marked: {' '.join(label.split())}."}
 
     def add_event_marker(
         self,

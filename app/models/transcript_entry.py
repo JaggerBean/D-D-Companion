@@ -19,8 +19,13 @@ class TranscriptEntry:
         return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), source, text.strip(), confidence)
 
     @classmethod
-    def scene(cls) -> "TranscriptEntry":
-        return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), "SYSTEM", "=== NEW SCENE ===", None, True)
+    def scene(cls, label: str = "") -> "TranscriptEntry":
+        lines = ["[DND_SCENE_START]", "CAPTURED_BY_USER: true"]
+        cleaned = " ".join(label.split())
+        if cleaned:
+            lines.append(f"LABEL: {cleaned}")
+        lines.append("[DND_SCENE_END]")
+        return cls(datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), "SYSTEM", "\n".join(lines), None, True)
 
     @classmethod
     def event(cls, event_type: str, label: str = "", details: str = "", image_path: str = "") -> "TranscriptEntry":
