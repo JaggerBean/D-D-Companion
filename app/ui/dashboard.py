@@ -2,12 +2,60 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 from app.config import ROOT
 from app.controller import AppController
+
+
+def _restore_windows_resize_frame() -> None:
+    """Give the themed frameless window its native edge and corner resize hit targets."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        process_id = os.getpid()
+        handle = wintypes.HWND()
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def find_app_window(hwnd: int, _lparam: int) -> bool:
+            nonlocal handle
+            owner_process = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_process))
+            if owner_process.value == process_id and user32.IsWindowVisible(hwnd):
+                handle = hwnd
+                return False
+            return True
+
+        user32.EnumWindows(find_app_window, 0)
+        if not handle:
+            return
+        GWL_STYLE = -16
+        WS_THICKFRAME = 0x00040000
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+        SWP_NOZORDER = 0x0004
+        SWP_FRAMECHANGED = 0x0020
+        style = user32.GetWindowLongW(handle, GWL_STYLE)
+        user32.SetWindowLongW(handle, GWL_STYLE, style | WS_THICKFRAME)
+        user32.SetWindowPos(
+            handle,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED,
+        )
+    except Exception:
+        # The frame is cosmetic; the app should still open if Windows rejects it.
+        pass
 
 
 class DashboardApi:
@@ -246,6 +294,7 @@ def run_dashboard(controller: AppController) -> None:
     )
     controller.hotkeys.start()
     controller.check_for_updates_async()
+    window.events.shown += lambda *_args: _restore_windows_resize_frame()
     window.events.closed += lambda *_args: controller.shutdown()
     icon = bundle_root / "app" / "assets" / "dnd-companion.ico"
     webview.start(gui="edgechromium", debug=False, icon=str(icon) if icon.exists() else None)
