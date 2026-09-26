@@ -367,8 +367,13 @@ class AppController:
                     "name": name,
                     "avatar": member.get("avatar", ""),
                 }
-                if member_id not in self._campaign().participants:
-                    self._campaign().participants[member_id] = {"nickname": "", "enabled": True, "icon": ""}
+                profile = self._campaign().participants.get(member_id)
+                if not isinstance(profile, dict):
+                    profile = {"nickname": "", "enabled": True, "icon": ""}
+                    self._campaign().participants[member_id] = profile
+                    changed = True
+                if str(profile.get("display_name", "")).strip() != name:
+                    profile["display_name"] = name
                     changed = True
         if changed:
             save_config(self.config)
@@ -387,6 +392,9 @@ class AppController:
                 profile = {"nickname": "", "enabled": True, "icon": ""}
                 self._campaign().participants[member_id] = profile
                 changed = True
+            if str(profile.get("display_name", "")).strip() != name:
+                profile["display_name"] = name
+                changed = True
             enabled = bool(profile.get("enabled", True))
             source = str(profile.get("nickname", "")).strip() or name
         if changed:
@@ -401,7 +409,15 @@ class AppController:
         # Before the first roster packet arrives, keep speakers who have already
         # talked visible so their settings remain reachable.
         if not members:
-            members = [{"id": member_id, "name": member_id, "avatar": ""} for member_id in profiles]
+            members = [
+                {
+                    "id": member_id,
+                    "name": str(profile.get("display_name", "")).strip() or member_id,
+                    "avatar": "",
+                }
+                for member_id, profile in profiles.items()
+                if isinstance(profile, dict)
+            ]
         result: list[dict[str, object]] = []
         for member in members:
             member_id = member["id"]
@@ -427,6 +443,7 @@ class AppController:
             profile = self._campaign().participants.setdefault(cleaned_id, {"nickname": "", "enabled": True, "icon": ""})
             previous_nickname = str(profile.get("nickname", "")).strip()
             member_name = str(self._voice_members.get(cleaned_id, {}).get("name", "")).strip()
+            saved_name = str(profile.get("display_name", "")).strip()
             profile["nickname"] = cleaned_name
             profile["enabled"] = bool(enabled)
             if clear_icon:
@@ -434,8 +451,8 @@ class AppController:
             if icon_data:
                 profile["icon"] = self._save_participant_icon(cleaned_id, icon_data)
         save_config(self.config)
-        display_name = cleaned_name or member_name or previous_nickname
-        return self.session.rename_source({previous_nickname, member_name}, display_name)
+        display_name = cleaned_name or member_name or saved_name or previous_nickname
+        return self.session.rename_source({previous_nickname, member_name, saved_name}, display_name)
 
     @staticmethod
     def _participant_icon_uri(relative_path: str) -> str:
