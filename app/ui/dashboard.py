@@ -18,6 +18,24 @@ class DashboardApi:
     def set_window(self, window: object) -> None:
         """Keep the native window private; only API methods should be exposed to JavaScript."""
         self._window = window
+        self._window_is_maximized = False
+
+    def minimize_window(self) -> None:
+        if self._window:
+            self._window.minimize()
+
+    def toggle_window_maximize(self) -> None:
+        if not self._window:
+            return
+        if self._window_is_maximized:
+            self._window.restore()
+        else:
+            self._window.maximize()
+        self._window_is_maximized = not self._window_is_maximized
+
+    def close_window(self) -> None:
+        if self._window:
+            self._window.destroy()
 
     def get_state(self) -> dict[str, Any]:
         all_entries = self.controller.session.all_entries()
@@ -204,7 +222,16 @@ def run_dashboard(controller: AppController) -> None:
     if not frontend.exists():
         raise RuntimeError("Dashboard files are missing. Run setup.bat again.")
     dashboard_api = DashboardApi(controller)
-    window = webview.create_window("D&D Companion", frontend.as_uri(), js_api=dashboard_api, width=1280, height=760, min_size=(760, 540))
+    window = webview.create_window(
+        "D&D Companion",
+        frontend.as_uri(),
+        js_api=dashboard_api,
+        width=1280,
+        height=760,
+        min_size=(760, 540),
+        frameless=True,
+        easy_drag=False,
+    )
     dashboard_api.set_window(window)
     controller.set_show_window_callback(lambda: window.show())
     controller.set_capture_menu_callback(
