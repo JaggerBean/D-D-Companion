@@ -156,6 +156,10 @@ class DashboardApi:
         self.controller.update_campaign_icon(icon_data, clear_icon)
         return {"message": "Campaign icon saved."}
 
+    def rename_campaign(self, name: str) -> dict[str, str]:
+        self.controller.rename_campaign(name)
+        return {"message": f"Campaign renamed to {self.controller._campaign().name}."}
+
     def switch_campaign(self, campaign_id: str) -> dict[str, str]:
         self.controller.switch_campaign(campaign_id)
         return {"message": f"Switched to {self.controller._campaign().name}."}

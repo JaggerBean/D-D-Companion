@@ -114,6 +114,15 @@ class AppController:
             campaign.icon = self._save_campaign_icon(icon_data)
         save_config(self.config)
 
+    def rename_campaign(self, name: str) -> None:
+        cleaned = " ".join(name.split())
+        if not cleaned:
+            raise ValueError("Give the campaign a name")
+        if len(cleaned) > 100:
+            raise ValueError("Campaign names must be 100 characters or fewer")
+        self._campaign().name = cleaned
+        save_config(self.config)
+
     def switch_campaign(self, campaign_id: str) -> None:
         if self.is_listening:
             raise RuntimeError("Stop the listener before switching campaigns")
