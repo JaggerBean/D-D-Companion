@@ -199,6 +199,16 @@ class DashboardApi:
         self.controller.set_vault_directory(str(selected[0]))
         return {"message": "Obsidian vault folder saved."}
 
+    def choose_campaign_vault_folder(self) -> dict[str, str]:
+        if not self._window:
+            raise RuntimeError("The folder chooser is not ready yet")
+        import webview
+
+        selected = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+        if not selected:
+            return {"message": "Vault folder selection was cancelled.", "path": ""}
+        return {"message": "Vault folder selected.", "path": str(selected[0])}
+
     def create_vault_folder(self, name: str) -> dict[str, str]:
         if not self._window:
             raise RuntimeError("The folder chooser is not ready yet")
@@ -214,9 +224,9 @@ class DashboardApi:
         self.controller.update_ai_instructions(instructions)
         return {"message": "AI instructions saved in D&D Companion."}
 
-    def create_campaign(self, name: str) -> dict[str, str]:
-        campaign = self.controller.create_campaign(name)
-        return {"message": f"Campaign created: {campaign.name}. Set up its vault to continue."}
+    def create_campaign(self, name: str, vault_directory: str = "") -> dict[str, str]:
+        campaign = self.controller.create_campaign(name, vault_directory)
+        return {"message": f"Campaign created: {campaign.name}."}
 
     def update_campaign_icon(self, icon_data: str = "", clear_icon: bool = False) -> dict[str, str]:
         self.controller.update_campaign_icon(icon_data, clear_icon)

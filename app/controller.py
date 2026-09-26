@@ -88,7 +88,7 @@ class AppController:
             for campaign in self.config.campaigns
         ]
 
-    def create_campaign(self, name: str) -> CampaignConfig:
+    def create_campaign(self, name: str, vault_directory: str = "") -> CampaignConfig:
         if self.is_listening:
             raise RuntimeError("Stop the listener before creating a campaign")
         cleaned = " ".join(name.split())
@@ -96,7 +96,10 @@ class AppController:
             raise ValueError("Give the campaign a name")
         if len(cleaned) > 100:
             raise ValueError("Campaign names must be 100 characters or fewer")
-        campaign = CampaignConfig(name=cleaned)
+        directory = Path(vault_directory).expanduser()
+        if not vault_directory.strip() or not directory.is_dir():
+            raise ValueError("Choose an Obsidian vault folder before creating the campaign")
+        campaign = CampaignConfig(name=cleaned, vault_directory=str(directory.resolve()))
         self.config.campaigns.append(campaign)
         self.config.active_campaign_id = campaign.id
         self._active_scene = None
